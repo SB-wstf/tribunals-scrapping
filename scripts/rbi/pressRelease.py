@@ -1,123 +1,108 @@
+import schedule
+import time,sys
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
-import time
 
-client = MongoClient("mongodb+srv://deepakkumar:M92xjniipmDT8rtK@cluster0.z2d9d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
-
+# MongoDB setup
+client = MongoClient(sys.argv[1])
 db = client['stale']
 collection = db['rbi']
 
-driver = webdriver.Chrome()
-driver.maximize_window()
+# Function to scrape and insert PDFs
+def scrape_rbi_pdfs():
+    driver = webdriver.Chrome()
+    driver.maximize_window()
 
-url = 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx'
-driver.get(url)
-time.sleep(5)
+    url = 'https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx'
+    driver.get(url)
+    time.sleep(5)
 
-def get_archive_button(driver):
-    archive_button = driver.find_element(By.XPATH, '//*[@id="divArchiveMain"]')
-    archive_button.click()
-    time.sleep(2)
-# get_archive_button(driver)
+    def get_archive_button(driver):
+        archive_button = driver.find_element(By.XPATH, '//*[@id="divArchiveMain"]')
+        archive_button.click()
+        time.sleep(2)
 
-get_archive_button(driver)
-# driver.close()
+    def scrape_pdfs_for_year(driver):
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        pdf_links = []
+        pdf_titles = []
 
-year_buttons = driver.find_elements(By.XPATH, "//div[contains(@id, 'btn') and contains(@class, 'year')]")
-year_ids = [button.get_attribute('id') for button in year_buttons]
+        for link in soup.find_all('a', class_='link2', href=True):
+            title = link.text.strip().replace('  ', ' ')
+            pdf_titles.append(title)
 
-year_ids
+        for link in soup.find_all('a', href=True):
+            if link['href'].endswith('.PDF'):
+                img = link.find('img', src=True)
+                if img and 'pdf' in img['src'].lower():
+                    pdf_links.append(link['href'])
 
-year_ids = year_ids[:-2]
+        all_pdf_links = []
+        for link, title in zip(pdf_links, pdf_titles):
+            all_pdf_links.append({
+                'link': link,
+                'title': title
+            })
 
-def scrape_pdfs_for_year(driver):
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
-    pdf_links = []
-    pdf_titles = []
+        return all_pdf_links
 
-    for link in soup.find_all('a', class_='link2', href=True):
-        title = link.text.strip().replace('  ', ' ')
-        pdf_titles.append(title)
-        
-    for link in soup.find_all('a', href=True):
-        if link['href'].endswith('.PDF'):
-            img = link.find('img', src=True)
-            if img and 'pdf' in img['src'].lower():
-                pdf_links.append(link['href'])
-    
-    all_pdf_links = []
-    for link, title in zip(pdf_links, pdf_titles):
-        all_pdf_links.append({
-            'link': link,
-            'title': title
-        })
-    
-    return all_pdf_links
+    # Initialize the count and the maximum count of existing documents
+    existing_count = 0
+    MAX_EXISTING_COUNT = 3
 
-year_ids[2]
+    year_buttons = driver.find_elements(By.XPATH, "//div[contains(@id, 'btn') and contains(@class, 'year')]")
+    year_ids = [button.get_attribute('id') for button in year_buttons]
+    year_ids = year_ids[:-2]  # Adjust as needed
 
-archives = year_ids[11:]
-archives
+    for year_id in year_ids:
+        if existing_count >= MAX_EXISTING_COUNT:
+            print("Reached max existing count, stopping scraper.")
+            break
 
-all_pdf_links = []
-for year_id in year_ids:
-    if year_id in archives:
+        # Click the year button
+        year_button = driver.find_element(By.ID, year_id)
+        year_button.click()
+        time.sleep(2)
+
+        # Click all months button
+        all_months_button_id = year_id[3:] + '0'
+        all_months_button = driver.find_element(By.XPATH, f'//*[@id="{all_months_button_id}"]')
+        all_months_button.click()
+        time.sleep(3)
+
         get_archive_button(driver)
-        
-    year_button = driver.find_element(By.ID, year_id)
-    year_button.click()
-    time.sleep(2)  
 
-    all_months_button_id = year_id[3:] + '0'
-    
-    all_months_button = driver.find_element(By.XPATH, f'//*[@id="{all_months_button_id}"]')
-    all_months_button.click()
-    time.sleep(3)
+        # Scrape PDF links for the current year
+        pdf_links = scrape_pdfs_for_year(driver)
 
-    get_archive_button(driver)
-    
-    pdf_links = scrape_pdfs_for_year(driver)
-    all_pdf_links.append(pdf_links)
-
-all_pdf_links
-
-all_pdf_links = []
-
-year_button = driver.find_element(By.ID, 'btn2022')
-year_button.click()
-time.sleep(2)  
-
-all_months_button_id = '2022' + '0'
-    
-all_months_button = driver.find_element(By.XPATH, f'//*[@id="{all_months_button_id}"]')
-all_months_button.click()
-time.sleep(2)
-    
-pdf_links = scrape_pdfs_for_year(driver)
-all_pdf_links.extend(pdf_links)
-
-all_pdf_links
-
-driver.quit()
-try:
-    for year in all_pdf_links:
-        for item in year:
+        # Process and insert documents into MongoDB one by one
+        for item in pdf_links:
             document = {
-                'tagString': 'Press Releases',  
+                'tagString': 'Press Releases',
                 'title': item['title'],
                 'pdfUrls': [item['link']]
             }
-            try:
-              print("insert into DB")
-            #   collection.insert_one(document)
-            except Exception as e:
-                print(f"Error inserting document: {e}")
-                print(f"Duplicate document: {document}")
 
-except Exception as ex:
-    print(f"Error during insertion loop: {ex}")
+            # Check if document already exists
+            existing_doc = collection.find_one({'title': item['title']})
+
+            if existing_doc:
+                # Increment count if the document already exists
+                existing_count += 1
+                print(f"Document already exists: {item['title']} (Existing count: {existing_count})")
+                if existing_count >= MAX_EXISTING_COUNT:
+                    print("Max existing documents found, stopping.")
+                    driver.quit()
+                    return  # Stop processing if existing_count reaches 3
+            else:
+                # Insert new document into MongoDB
+                try:
+                    collection.insert_one(document)
+                    print(f"Inserted new document: {document['title']}")
+                except Exception as e:
+                    print(f"Error inserting document: {e}")
+
+    driver.quit()
+

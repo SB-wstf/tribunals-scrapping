@@ -5,9 +5,7 @@ import mongoose from "mongoose";
 
 const connect = async () => {
   try {
-    mongoose.connect(
-      "mongodb+srv://deepakkumar:M92xjniipmDT8rtK@cluster0.z2d9d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-    );
+    mongoose.connect(process.env.MONGO_DB_URI);
 
     console.log("database connected");
 

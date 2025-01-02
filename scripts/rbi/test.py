@@ -1,9 +1,7 @@
-print("Hellow world")
-
-# example.py
+import sys
 
 def my_function():
-    return "Hello from Python!"
+    print(sys.argv[1])
 
 if __name__ == "__main__":
-    print(my_function())
+    my_function()
