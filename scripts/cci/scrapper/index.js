@@ -52,7 +52,11 @@ cron.schedule("0 0 * * *", async () => {
 });
 
 // Initial scraping run
-(async () => {
-  console.log("Running initial scraping...");
-  await startScraping();
-})();
+// (async () => {
+//   console.log("Running initial scraping...");
+//   await startScraping();
+// })();
+
+
+
+export const scrapeCCI = startScraping;

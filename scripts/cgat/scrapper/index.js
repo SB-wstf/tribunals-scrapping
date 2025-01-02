@@ -184,13 +184,13 @@ const scrapeAll = async () => {
 };
 
 // Run scraping immediately
-(async () => {
-  try {
-    await scrapeAll();
-  } catch (err) {
-    console.error("Error found during initial scraping:", err);
-  }
-})();
+// (async () => {
+//   try {
+//     await scrapeAll();
+//   } catch (err) {
+//     console.error("Error found during initial scraping:", err);
+//   }
+// })();
 
 // // Schedule scraping as a cron job
 // cron.schedule("0 0 * * *", async () => {
