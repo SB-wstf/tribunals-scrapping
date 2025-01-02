@@ -55,7 +55,7 @@ connectDB();
 // Function to scrape data from the pages
 const scrapeData = async () => {
     console.log("RUNNING ITAT SCRAPER");
-    return
+    // return
     const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
   
